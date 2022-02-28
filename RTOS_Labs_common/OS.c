@@ -320,10 +320,38 @@ uint32_t OS_Id(void){
 };
 
 void(*PeriodicTask)(void);
+uint32_t periodic_counter = 0; //will need an array for multiple jitter tasks
+uint32_t maxJitter1;
 
 void Timer4A_Handler(void){
   TIMER4_ICR_R = TIMER_ICR_TATOCINT;
-  (*PeriodicTask)();
+	
+	static unsigned long lastTime;
+	unsigned long jitter;
+	unsigned long thisTime;
+
+	//Taken from Lab2.c 
+	if (NumSamples < RUNLENGTH) {
+		thisTime= OS_Time();       
+
+		(*PeriodicTask)();
+		periodic_counter++;
+		if(periodic_counter>1){    // ignore timing of first interrupt
+			unsigned long diff = OS_TimeDifference(lastTime, thisTime);
+			if (diff > periodic_periods[0])
+				jitter = (diff-periodic_periods[0]+4)/8;  // in 0.1 usec
+			else
+				jitter = (periodic_periods[0]-diff+4)/8;  // in 0.1 usec
+			if(jitter > maxJitter1)
+				maxJitter1 = jitter; // in usec
+			// jitter should be 0
+			if(jitter >= JITTERSIZE)
+				jitter = JITTERSIZE-1;
+			jitter1Histogram[jitter]++;
+		}
+		lastTime = thisTime;
+	}
+	
 }
 //******** OS_AddPeriodicThread *************** 
 // add a background periodic task
