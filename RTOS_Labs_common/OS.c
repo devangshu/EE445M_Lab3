@@ -322,6 +322,7 @@ uint32_t OS_Id(void){
 void(*PeriodicTask)(void);
 uint32_t periodic_counter = 0; //will need an array for multiple jitter tasks
 uint32_t maxJitter1;
+uint32_t LastTime;
 
 void Timer4A_Handler(void){
   TIMER4_ICR_R = TIMER_ICR_TATOCINT;
@@ -330,27 +331,27 @@ void Timer4A_Handler(void){
 	unsigned long jitter;
 	unsigned long thisTime;
 
-	//Taken from Lab2.c 
-	if (NumSamples < RUNLENGTH) {
-		thisTime= OS_Time();       
-
-		(*PeriodicTask)();
+if(NumSamples < RUNLENGTH){   // finite time run
+    thisTime = OS_Time();       // current time, 12.5 ns
+		PeriodicTask();
 		periodic_counter++;
-		if(periodic_counter>1){    // ignore timing of first interrupt
-			unsigned long diff = OS_TimeDifference(lastTime, thisTime);
-			if (diff > periodic_periods[0])
-				jitter = (diff-periodic_periods[0]+4)/8;  // in 0.1 usec
-			else
-				jitter = (periodic_periods[0]-diff+4)/8;  // in 0.1 usec
-			if(jitter > maxJitter1)
-				maxJitter1 = jitter; // in usec
-			// jitter should be 0
-			if(jitter >= JITTERSIZE)
-				jitter = JITTERSIZE-1;
-			jitter1Histogram[jitter]++;
-		}
-		lastTime = thisTime;
-	}
+    if(periodic_counter>1){    // ignore timing of first interrupt
+      uint32_t diff = OS_TimeDifference(LastTime,thisTime);
+      if(diff>PERIOD){
+        jitter = (diff-PERIOD+4)/8;  // in 0.1 usec
+      }else{
+        jitter = ( PERIOD-diff+4)/8;  // in 0.1 usec
+      }
+      if(jitter > MaxJitter){
+        MaxJitter = jitter; // in usec
+      }       // jitter should be 0
+      if(jitter >= JitterSize){
+        jitter = JitterSize-1;
+      }
+      JitterHistogram[jitter]++; 
+    }
+    LastTime = thisTime;
+  }
 	
 }
 //******** OS_AddPeriodicThread *************** 
@@ -376,6 +377,7 @@ int OS_AddPeriodicThread(void(*task)(void),
   // put Lab 2 (and beyond) solution here
   long sr; 
   sr = StartCritical(); // make this function atomic
+	maxJitter1 = 0;
 	SYSCTL_RCGCTIMER_R |= 0x10;   // 0) activate TIMER4
   TIMER4_CTL_R = 0x00000000;    // 1) disable TIMER4A during setup
   TIMER4_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
@@ -398,11 +400,20 @@ int OS_AddPeriodicThread(void(*task)(void),
 
 
 void (*SW1_Task) (void);
+void (*SW2_Task) (void);
+
 
 void SW1_Debounce(void){
   OS_Sleep(10);
   GPIO_PORTF_ICR_R = 0x10; // clear flag
   GPIO_PORTF_IM_R |= 0x10; // arm interrupt again
+	OS_Kill();
+}
+
+void SW2_Debounce(void){
+  OS_Sleep(10);
+  GPIO_PORTF_ICR_R = 0x01; // clear flag
+  GPIO_PORTF_IM_R |= 0x01; // arm interrupt again
 	OS_Kill();
 }
 /*----------------------------------------------------------------------------
@@ -417,6 +428,16 @@ void GPIOPortF_Handler(void){
     if(addThreadSuccess == 0){
        GPIO_PORTF_ICR_R = 0x10; // clear flag
        GPIO_PORTF_IM_R |= 0x10; // arm interrupt again 
+    }
+  }
+	
+	  if(GPIO_PORTF_RIS_R & 0x01){ // if SW1 is pressed
+    GPIO_PORTF_IM_R &= ~0x01; // disarm interrupt
+    (*SW1_Task)();
+    int addThreadSuccess = OS_AddThread(&SW2_Debounce, 128, 1); // temporary hardcoded priority
+    if(addThreadSuccess == 0){
+       GPIO_PORTF_ICR_R = 0x01; // clear flag
+       GPIO_PORTF_IM_R |= 0x01; // arm interrupt again 
     }
   }
 
@@ -478,8 +499,31 @@ int OS_AddSW1Task(void(*task)(void), uint32_t priority){
 //           determines the relative priority of these four threads
 int OS_AddSW2Task(void(*task)(void), uint32_t priority){
   // put Lab 2 (and beyond) solution here
-    
-  return 0; // replace this line with solution
+    long volatile delay;
+	SYSCTL_RCGCGPIO_R |= 0x00000020; 	// (a) activate clock for port F
+  delay = SYSCTL_RCGCGPIO_R;
+  GPIO_PORTF_CR_R = 0x01;           // allow changes to PF4
+  GPIO_PORTF_DIR_R &= ~0x01;    		// (c) make PF4 in (built-in button)
+  GPIO_PORTF_AFSEL_R &= ~0x01;  		//     disable alt funct on PF4
+  GPIO_PORTF_DEN_R |= 0x01;     		//     enable digital I/O on PF4   
+  GPIO_PORTF_PCTL_R &= ~0x0000000F; // configure PF4 as GPIO
+  GPIO_PORTF_AMSEL_R = 0;       		//     disable analog functionality on PF
+  GPIO_PORTF_PUR_R |= 0x01;     		//     enable weak pull-up on PF4
+  GPIO_PORTF_IS_R &= ~0x01;     		// (d) PF4 is edge-sensitive
+  GPIO_PORTF_IBE_R &= ~0x01;     		//     PF4 is not edges
+	GPIO_PORTF_IEV_R &= ~0x01;     		//     PF4 falling edges
+
+	GPIO_PORTF_ICR_R = 0x01;      		// (e) clear flag4
+  GPIO_PORTF_IM_R |= 0x01;      		// (f) arm interrupt on PF4
+	
+	priority = (priority & 0x07) << 21;	// NVIC priority bit (21-23)
+	NVIC_PRI7_R = (NVIC_PRI7_R & 0xFF00FFFF); // clear priority
+	NVIC_PRI7_R = (NVIC_PRI7_R | priority); 
+  NVIC_EN0_R = 0x40000000;      		// (h) enable interrupt 30 in NVIC  
+
+  SW2_Task = task;
+
+  return 1; // replace this line with solution
 };
 
 
