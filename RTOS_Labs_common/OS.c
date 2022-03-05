@@ -88,6 +88,32 @@ void Timer3A_Handler(void){
 	}
 }
 
+void OS_GetNextThread(void){
+	
+	TCB_t *tempPt = RunPt; // temporary copy so we can iterate through TCBs
+	TCB_t *last = RunPt; 
+	TCB_t *highestPriority;
+	int maxPriority = 100; // this value will change based on the number of priority levels
+	
+	if(RunPt->current_state == DEAD){
+		last = RunPt->prev;
+	}
+	
+	while(tempPt != last){
+		tempPt = tempPt->next;
+		if(tempPt->current_state == ACTIVE){
+			if(tempPt->priority < maxPriority){
+				highestPriority = tempPt;
+				maxPriority = tempPt->priority;
+			}
+		}
+	}
+	
+	RunPt = highestPriority->prev; //context switcher is set up to read in next tcb from runPt
+	
+}
+
+
 /*------------------------------------------------------------------------------
   Systick Interrupt Handler
   SysTick interrupt happens every 10 ms
@@ -96,6 +122,7 @@ void Timer3A_Handler(void){
 void SysTick_Handler(void) {
 
 	//PD3^=0x08;
+	OS_GetNextThread();
 	OS_Suspend();
 	//PD3^=0x08;
 
@@ -284,6 +311,7 @@ int OS_AddThread(void(*task)(void),
   TCBs[numTCBs].sleep_ms = 0;
   TCBs[numTCBs].current_state = ACTIVE;
   TCBs[numTCBs].id = numTCBs;
+	TCBs[numTCBs].priority = priority;
 	NumThreads_Global++;
   EndCritical(sr);
      
@@ -327,9 +355,11 @@ uint32_t LastTime;
 void Timer4A_Handler(void){
   TIMER4_ICR_R = TIMER_ICR_TATOCINT;
 	
+	/*
 	static unsigned long lastTime;
 	unsigned long jitter;
 	unsigned long thisTime;
+
 
 if(NumSamples < RUNLENGTH){   // finite time run
     thisTime = OS_Time();       // current time, 12.5 ns
@@ -352,7 +382,7 @@ if(NumSamples < RUNLENGTH){   // finite time run
     }
     LastTime = thisTime;
   }
-	
+	*/
 }
 //******** OS_AddPeriodicThread *************** 
 // add a background periodic task
@@ -421,7 +451,7 @@ void SW2_Debounce(void){
  *----------------------------------------------------------------------------*/
 void GPIOPortF_Handler(void){
  
-  if(GPIO_PORTF_RIS_R & 0x10){ // if SW1 is pressed
+  if(GPIO_PORTF_RIS_R & 0x10){ // if SW5 is pressed
     GPIO_PORTF_IM_R &= ~0x10; // disarm interrupt
     (*SW1_Task)();
     int addThreadSuccess = OS_AddThread(&SW1_Debounce, 128, 1); // temporary hardcoded priority
