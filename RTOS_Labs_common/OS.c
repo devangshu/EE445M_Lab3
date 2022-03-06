@@ -35,8 +35,6 @@ TCB_t * RunPt;
 uint32_t * current_sp;
 int32_t * current_block_pt;
 
-TCB_t *RunPt;
-#define MAXTHREADS 10
 #define STACKDEPTH 128
 TCB_t TCBs[MAXTHREADS];
 uint32_t Stacks[MAXTHREADS][STACKDEPTH];
@@ -176,8 +174,24 @@ void OS_Init(void){
 // output: none
 void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
   semaPt-> Value = value;
+  semaPt->head = 0;
+  semaPt->tail = 0;
 }; 
 
+static void Mutex_Block(Sema4Type *semaPt){
+  RunPt->block_pt = semaPt;
+  RunPt->current_state = BLOCKED;
+  
+  uint32_t tail = semaPt->tail;
+  semaPt->blocked_threads[tail] = RunPt;
+  semaPt->tail = (tail+1) % MAXTHREADS;
+}
+
+static void Mutex_Release(Sema4Type *semaPt){
+  uint32_t head = semaPt->head;
+  semaPt->blocked_threads[head]->current_state = ACTIVE;
+  semaPt->head = (head + 1) % MAXTHREADS;
+}
 
 // ******** OS_Wait ************
 // decrement semaphore 
@@ -188,12 +202,12 @@ void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
 void OS_Wait(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
   DisableInterrupts(); // disable interrupts to make sure current thread is the only thread trying to access the semaphore at any given time 
-  while(semaPt->Value <= 0){
-    EnableInterrupts();
-		OS_Suspend();
-    DisableInterrupts();
-  }
   semaPt->Value -= 1;
+  if(semaPt->Value < 0){
+    Mutex_Block(semaPt);
+    EnableInterrupts();
+    OS_Suspend();
+  }
   EnableInterrupts(); // allow other threads to request semaphore after we have acquired it
 }; 
 
@@ -206,6 +220,9 @@ void OS_Wait(Sema4Type *semaPt){
 void OS_Signal(Sema4Type *semaPt){
   long sr = StartCritical();
   semaPt->Value += 1; // increment semaphore value atomically. If value was at 0, this allows a waiting thread to acquire the semaphore.
+  if(semaPt->Value <= 0){
+    Mutex_Release(semaPt);   
+  }
   EndCritical(sr);
 }; 
 
@@ -216,13 +233,12 @@ void OS_Signal(Sema4Type *semaPt){
 // output: none
 void OS_bWait(Sema4Type *semaPt){
   DisableInterrupts();
-  while(semaPt->Value <= 0){ // same as OS_Wait, allow other threads to access cpu time
+  while(semaPt->Value == 0){ // same as OS_Wait, allow other threads to access cpu time
+    Mutex_Block(semaPt);
     EnableInterrupts();
-    //Trigger PendSV
-		OS_Suspend();
-    DisableInterrupts();
+    OS_Suspend();
   }
-  semaPt->Value -= 1;
+  semaPt->Value = 0;
   EnableInterrupts();
 }; 
 
@@ -235,7 +251,10 @@ void OS_bSignal(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
   long sr;
   sr = StartCritical();
-  semaPt->Value += 1; // same as OS_Signal, atomically increment semaphore value
+  if(semaPt->Value == 0){
+    Mutex_Release(semaPt);
+  }
+  semaPt->Value = 1;
   EndCritical(sr);
 }; 
 

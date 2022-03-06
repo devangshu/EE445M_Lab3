@@ -25,12 +25,16 @@
 #define TIME_2MS    (2*TIME_1MS)  
 #define TIME_500US  (TIME_1MS/2)  
 #define TIME_250US  (TIME_1MS/5)  
+#define MAXTHREADS 10
 
 /**
  * \brief Semaphore structure. Feel free to change the type of semaphore, there are lots of good solutions
  */  
 struct  Sema4{
   int32_t Value;   // >0 means free, otherwise means busy        
+  uint32_t head;
+  uint32_t tail;
+  TCB_t *blocked_threads[MAXTHREADS];
 // add other components here, if necessary to implement blocking
 };
 typedef struct Sema4 Sema4Type;
