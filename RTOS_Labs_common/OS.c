@@ -73,6 +73,9 @@ static void Timer3A_Init(void){
 	EndCritical(sr);
 }
 
+/*
+Timer 3 is used to update all of the sleeping threads
+*/
 void Timer3A_Handler(void){
 	TIMER3_ICR_R = TIMER_ICR_TATOCINT;
 	MsTime++;
@@ -366,14 +369,20 @@ uint32_t OS_Id(void){
   return 0; // replace this line with solution
 };
 
-void(*PeriodicTask)(void);
+#define MAXPERIODIC 2
+uint32_t periodic_thread_cnt = 0;
+void(*PeriodicTask1)(void);
+void(*PeriodicTask2)(void);
 uint32_t periodic_counter = 0; //will need an array for multiple jitter tasks
 uint32_t maxJitter1;
 uint32_t LastTime;
 
+/*
+Timer 4 is used for one periodic thread
+*/
 void Timer4A_Handler(void){
   TIMER4_ICR_R = TIMER_ICR_TATOCINT;
-	
+  PeriodicTask1();
 	/*
 	static unsigned long lastTime;
 	unsigned long jitter;
@@ -403,6 +412,12 @@ if(NumSamples < RUNLENGTH){   // finite time run
   }
 	*/
 }
+
+void Timer1A_Handler(void){
+  TIMER1_ICR_R = TIMER_ICR_TATOCINT;
+  PeriodicTask2();
+}
+
 //******** OS_AddPeriodicThread *************** 
 // add a background periodic task
 // typically this function receives the highest priority
@@ -426,26 +441,56 @@ int OS_AddPeriodicThread(void(*task)(void),
   // put Lab 2 (and beyond) solution here
   long sr; 
   sr = StartCritical(); // make this function atomic
-	maxJitter1 = 0;
-	SYSCTL_RCGCTIMER_R |= 0x10;   // 0) activate TIMER4
-  TIMER4_CTL_R = 0x00000000;    // 1) disable TIMER4A during setup
-  TIMER4_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
-  TIMER4_TAMR_R = 0x00000002;   // 3) configure for periodic mode, default down-count settings
-  TIMER4_TAILR_R = period-1;    // 4) reload value
-  TIMER4_TAPR_R = 0;            // 5) bus clock resolution
-  TIMER4_ICR_R = 0x00000001;    // 6) clear TIMER4A timeout flag
-  TIMER4_IMR_R = 0x00000001;    // 7) arm timeout interrupt
-  priority = (priority & 0x07) << 21; // mask priority (nvic bits 23-21)
-  NVIC_PRI17_R = (NVIC_PRI17_R&0xF00FFFFF);
-  NVIC_PRI17_R = (NVIC_PRI17_R | priority); // 8) priority
-  // interrupts enabled in the main program after all devices initialized
-  // vector number 51, interrupt number 35
-  NVIC_EN2_R = 1<<(70-64);      // 9) enable IRQ 70 in NVIC 
-  TIMER4_CTL_R = 0x00000001;    // 10) enable TIMER4A
-  EndCritical(sr);  
-  PeriodicTask = task;
-  return 1;
-};
+  if(periodic_thread_cnt < MAXPERIODIC){
+    switch (periodic_thread_cnt)
+    {
+    case 0:
+     // maxJitter1 = 0;
+    	SYSCTL_RCGCTIMER_R |= 0x10;   // 0) activate TIMER4
+      TIMER4_CTL_R = 0x00000000;    // 1) disable TIMER4A during setup
+      TIMER4_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
+      TIMER4_TAMR_R = 0x00000002;   // 3) configure for periodic mode, default down-count settings
+      TIMER4_TAILR_R = period-1;    // 4) reload value
+      TIMER4_TAPR_R = 0;            // 5) bus clock resolution
+      TIMER4_ICR_R = 0x00000001;    // 6) clear TIMER4A timeout flag
+      TIMER4_IMR_R = 0x00000001;    // 7) arm timeout interrupt
+      priority = (priority & 0x07) << 21; // mask priority (nvic bits 23-21)
+      NVIC_PRI17_R = (NVIC_PRI17_R&0xF00FFFFF);
+      NVIC_PRI17_R = (NVIC_PRI17_R | priority); // 8) priority
+      // interrupts enabled in the main program after all devices initialized
+      // vector number 51, interrupt number 35
+      NVIC_EN2_R = 1<<(70-64);      // 9) enable IRQ 70 in NVIC 
+      TIMER4_CTL_R = 0x00000001;    // 10) enable TIMER4A
+      PeriodicTask1 = task;
+      break;
+    case 1:
+      //maxJitter2 = 0;
+			SYSCTL_RCGCTIMER_R |= 0x02;   // 0) activate TIMER1
+			TIMER1_CTL_R = 0x00000000;    // 1) disable TIMER1A during setup
+			TIMER1_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
+			TIMER1_TAMR_R = 0x00000002;   // 3) configure for periodic mode, default down-count settings
+			TIMER1_TAILR_R = period-1;    // 4) reload value
+			TIMER1_TAPR_R = 0;            // 5) bus clock resolution
+			TIMER1_ICR_R = 0x00000001;    // 6) clear TIMER1A timeout flag
+			TIMER1_IMR_R = 0x00000001;    // 7) arm timeout interrupt
+			NVIC_PRI5_R = (NVIC_PRI5_R&0xFFFF00FF)| (priority << 13); // 8) priority bit 15-13
+			// interrupts enabled in the main program after all devices initialized
+			// vector number 37, interrupt number 21
+			NVIC_EN0_R = 1<<21;           // 9) enable IRQ 21 in NVIC
+			TIMER1_CTL_R = 0x00000001;    // 10) enable TIMER1A
+      PeriodicTask2 = task;
+      break; 
+    default:
+      break;
+    }
+    periodic_thread_cnt++;
+    EndCritical(sr);
+    return 1;
+  } else {
+    EndCritical(sr);
+    return 0;
+  }
+}
 
 
 void (*SW1_Task) (void);
