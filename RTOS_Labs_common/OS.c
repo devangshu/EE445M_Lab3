@@ -213,12 +213,15 @@ void OS_Wait(Sema4Type *semaPt){
   DisableInterrupts(); // disable interrupts to make sure current thread is the only thread trying to access the semaphore at any given time 
   semaPt->Value -= 1;
   if(semaPt->Value < 0){
+    /*
     RunPt->block_pt = semaPt;
 		RunPt->current_state = BLOCKED;
   
 		uint32_t tail = semaPt->tail;
 		semaPt->blocked_threads[tail] = RunPt;
 		semaPt->tail = (tail+1) % MAXTHREADS;
+    */
+    Mutex_Block(semaPt);
     EnableInterrupts();
     OS_Suspend();
   }
@@ -235,9 +238,12 @@ void OS_Signal(Sema4Type *semaPt){
   long sr = StartCritical();
   semaPt->Value += 1; // increment semaphore value atomically. If value was at 0, this allows a waiting thread to acquire the semaphore.
   if(semaPt->Value <= 0){
+    /*
 		uint32_t head = semaPt->head;
 		semaPt->blocked_threads[head]->current_state = ACTIVE;
 		semaPt->head = (head + 1) % MAXTHREADS;  
+    */
+   Mutex_Release(semaPt);
   }
   EndCritical(sr);
 }; 
