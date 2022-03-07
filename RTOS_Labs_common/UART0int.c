@@ -36,7 +36,7 @@
 #include "../RTOS_Labs_common/MyFifo.h"
 #include "../RTOS_Labs_common/UART0int.h"
 #include "../RTOS_Labs_common/OS.h"
-#include "../inc/FIFO.h"
+// #include "../inc/FIFO.h"
 
 #define NVIC_EN0_INT5           0x00000020  // Interrupt 5 enable
 
@@ -70,8 +70,8 @@
 
 // initialize the semaphors for rx and tx
 // create index implementation FIFO (see FIFO.h)
- AddIndexFifo(Rx, FIFOSIZE, char, FIFOSUCCESS, FIFOFAIL)
- AddIndexFifo(Tx, 1024, char, FIFOSUCCESS, FIFOFAIL)
+//  AddIndexFifo(Rx, FIFOSIZE, char, FIFOSUCCESS, FIFOFAIL)
+//  AddIndexFifo(Tx, 1024, char, FIFOSUCCESS, FIFOFAIL)
 
 // Initialize UART0
 // Baud rate is 115200 bits/sec

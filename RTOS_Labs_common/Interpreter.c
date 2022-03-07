@@ -150,6 +150,7 @@ void Interpreter(void){
                     break;
                 case 'h':
                 default:
+                    Interpreter_help();
                     break;
             }
         }
