@@ -347,7 +347,7 @@ int realmain(void){ // realmain
   // create initial foreground threads
   NumCreated = 0;
   NumCreated += OS_AddThread(&Consumer,128,1); 
-  NumCreated += OS_AddThread(&Interpreter,128,2); 
+  //NumCreated += OS_AddThread(&Interpreter,128,2); 
   NumCreated += OS_AddThread(&Idle,128,5);  // Lab 3, at lowest priority 
  
   OS_Launch(TIME_2MS); // doesn't return, interrupts enabled in here
@@ -777,10 +777,10 @@ int Testmain7(void){      // Testmain7  Lab 3
   WaitCount2 = 0;     // number of times s is successfully waited on
   WaitCount3 = 0;    // number of times s is successfully waited on
   OS_InitSemaphore(&s,0);   // this is the test semaphore
-  OS_AddPeriodicThread(&Signal1,(799*TIME_1MS)/1000,0);   // 0.799 ms, higher priority
-  OS_AddPeriodicThread(&Signal2,(1111*TIME_1MS)/1000,1);  // 1.111 ms, lower priority
+  //OS_AddPeriodicThread(&Signal1,(799*TIME_1MS)/1000,0);   // 0.799 ms, higher priority
+  //OS_AddPeriodicThread(&Signal2,(1111*TIME_1MS)/1000,1);  // 1.111 ms, lower priority
   NumCreated = 0 ;
-  NumCreated += OS_AddThread(&OutputThread,128,2);   // results output thread
+  //NumCreated += OS_AddThread(&OutputThread,128,2);   // results output thread
   NumCreated += OS_AddThread(&Signal3,128,2);   // signalling thread
   NumCreated += OS_AddThread(&Wait1,128,2);   // waiting thread
   NumCreated += OS_AddThread(&Wait2,128,2);   // waiting thread
@@ -862,5 +862,5 @@ int TestmainFIFO(void){   // TestmainFIFO
 
 //*******************Trampoline for selecting main to execute**********
 int main(void) { 			// main 
-  Testmain7();
+  realmain();
 }
