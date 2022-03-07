@@ -1411,7 +1411,7 @@ void ST7735_Message(uint32_t  d, uint32_t  l, char *pt, int32_t value){
     if(d == 0){
         ST7735_SetCursor(0, l);
     } else {
-        ST7735_SetCursor(0, 8+l); //check whether the constant should be
+        ST7735_SetCursor(0, 8+l);
     }
 
     // Display string at desired cursor
@@ -1423,7 +1423,7 @@ void ST7735_Message(uint32_t  d, uint32_t  l, char *pt, int32_t value){
               value = -value;
             }
             ST7735_OutUDec(value);
-        }
+    }
   OS_bSignal(&LCDFree);
 }
 

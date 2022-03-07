@@ -21,14 +21,58 @@
 
 #define TRUE 1
 
-// extern int32_t MaxJitter;
 extern uint32_t NumCreated;
 extern int32_t MaxJitter;
 extern uint32_t NumThreads_Global;
 
-// Print jitter histogram
+// Print jitter histogram to LCD
 void Jitter(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogram[]){
-    // write this for Lab 3 (the latest)	
+    // find tallest column for scaling
+    int largest_col = 0;
+    int largest_col_count = 0;
+
+    for (int i = 0; i < JitterSize; i++) {
+        if (JitterHistogram[i] > largest_col_count) {
+            largest_col = i;
+            largest_col_count = JitterHistogram[i];
+        }
+    }
+
+    // scale each column to fit into 8 rows (top virtual screen)
+    float scale_factor = (float) largest_col_count / 8.0;
+    uint32_t scaled_jitter[JitterSize];
+
+    for (int i = 0; i < JitterSize; i++) {
+        scaled_jitter[i] = (int) (JitterHistogram[i] / scale_factor);
+    }
+
+    // create histogram
+    char jitter_message[8][JitterSize+1];
+    
+    for (int i = 7; i >= 0; i++) {
+        for (int j = 0; j < JitterSize; j++) {
+            if (scaled_jitter[j] >= i) {
+                jitter_message[7-i][j] = '*';
+            } else {
+                jitter_message[7-i][j] = ' ';
+            }
+        }
+        jitter_message[i][JitterSize] = '\0'; // null terminate the string
+    }
+
+    // clear screen
+    ST7735_FillRect(0, 0, 128, 79, 0); 
+    ST7735_FillRect(0, 80, 128, 160, 0);
+
+    // print the histogram on the top screen
+    for (int r=0; r<8; r++) {
+        ST7735_Message(0, r, jitter_message[r], -1);
+    }
+
+    // print max jitter on the bottom screen
+    char outstring[30];
+    snprintf(outstring, 30, "Max Jitter: %d ms", MaxJitter);
+    ST7735_Message(1, 0, outstring, -1);
 }
 
 static void OutCRLF(void){
