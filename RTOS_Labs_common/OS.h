@@ -27,6 +27,27 @@
 #define TIME_250US  (TIME_1MS/5)  
 #define MAXTHREADS 10
 
+
+
+typedef enum ThreadState_t {
+   ACTIVE, SLEEP, RUN, DEAD, BLOCKED
+} ThreadState_t;
+
+typedef struct TCB_t TCB_t;
+typedef struct Sema4 Sema4Type;
+
+
+struct TCB_t{
+   uint32_t * sp;
+   TCB_t *next; // add back for when removing tasks
+   TCB_t *prev;
+   Sema4Type *block_pt;
+   uint32_t id;
+   uint8_t priority;
+   uint32_t sleep_ms; // sleep timer, time left
+   ThreadState_t current_state;
+};
+
 /**
  * \brief Semaphore structure. Feel free to change the type of semaphore, there are lots of good solutions
  */  
@@ -38,23 +59,6 @@ struct  Sema4{
 // add other components here, if necessary to implement blocking
 };
 typedef struct Sema4 Sema4Type;
-
-typedef enum ThreadState_t {
-   ACTIVE, SLEEP, RUN, DEAD, BLOCKED
-} ThreadState_t;
-
-typedef struct TCB_t TCB_t;
-
-struct TCB_t{
-   uint32_t * sp;
-   TCB_t *next; // add back for when removing tasks
-   TCB_t *prev;
-   int32_t *block_pt;
-   uint32_t id;
-   uint8_t priority;
-   uint32_t sleep_ms; // sleep timer, time left
-   ThreadState_t current_state;
-};
 
 struct MailBox{
    Sema4Type Send;
