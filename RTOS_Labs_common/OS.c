@@ -41,6 +41,7 @@ uint32_t Stacks[MAXTHREADS][STACKDEPTH];
 uint32_t NumThreads_Global = 0;
 #define TIME1MS 80000
 uint32_t MsTime = 0;
+TCB_t *lastTCB;
 
 
 #define MAX_FIFO 64
@@ -92,26 +93,26 @@ void Timer3A_Handler(void){
 void OS_GetNextThread(void){
 	
 	TCB_t *tempPt = RunPt; // temporary copy so we can iterate through TCBs
-	TCB_t *last = RunPt; 
+//	TCB_t *last = RunPt; 
 	TCB_t *highestPriority;
-	int maxPriority = 100; // this value will change based on the number of priority levels
+	int maxPriority = 255; // this value will change based on the number of priority levels
+  
+  do
+  {
+    tempPt = tempPt->next;
+    if(((tempPt->priority) < maxPriority) && ((tempPt->current_state) == ACTIVE)){
+      maxPriority = tempPt->priority;
+      highestPriority = tempPt;
+    }
+  } while (RunPt != tempPt);
+  RunPt = highestPriority;  
 	
-	if(RunPt->current_state == DEAD){
-		last = RunPt->prev;
-	}
-	
-	while(tempPt != last){
-		tempPt = tempPt->next;
-		if(tempPt->current_state == ACTIVE){
-			if(tempPt->priority < maxPriority){
-				highestPriority = tempPt;
-				maxPriority = tempPt->priority;
-			}
-		}
-	}
-	
-	RunPt = highestPriority->prev; //context switcher is set up to read in next tcb from runPt
-	
+	/*
+	RunPt = RunPt->next;
+  while(RunPt->current_state != ACTIVE){
+    RunPt = RunPt->next;
+  }
+	*/
 }
 
 
@@ -121,9 +122,8 @@ void OS_GetNextThread(void){
   used for preemptive thread switch
  *------------------------------------------------------------------------------*/
 void SysTick_Handler(void) {
-
-	//PD3^=0x08;
-	OS_GetNextThread();
+  
+  //PD3^=0x08;
 	OS_Suspend();
 	//PD3^=0x08;
 
@@ -157,6 +157,7 @@ void OS_Init(void){
   DisableInterrupts();
   PLL_Init(Bus80MHz);
 	Timer3A_Init();
+  UART_Init();
 
   // initialize all TCBs
   uint32_t i;
@@ -207,7 +208,12 @@ void OS_Wait(Sema4Type *semaPt){
   DisableInterrupts(); // disable interrupts to make sure current thread is the only thread trying to access the semaphore at any given time 
   semaPt->Value -= 1;
   if(semaPt->Value < 0){
-    Mutex_Block(semaPt);
+    RunPt->block_pt = semaPt;
+		RunPt->current_state = BLOCKED;
+  
+		uint32_t tail = semaPt->tail;
+		semaPt->blocked_threads[tail] = RunPt;
+		semaPt->tail = (tail+1) % MAXTHREADS;
     EnableInterrupts();
     OS_Suspend();
   }
@@ -224,7 +230,9 @@ void OS_Signal(Sema4Type *semaPt){
   long sr = StartCritical();
   semaPt->Value += 1; // increment semaphore value atomically. If value was at 0, this allows a waiting thread to acquire the semaphore.
   if(semaPt->Value <= 0){
-    Mutex_Release(semaPt);   
+		uint32_t head = semaPt->head;
+		semaPt->blocked_threads[head]->current_state = ACTIVE;
+		semaPt->head = (head + 1) % MAXTHREADS;  
   }
   EndCritical(sr);
 }; 
@@ -237,7 +245,12 @@ void OS_Signal(Sema4Type *semaPt){
 void OS_bWait(Sema4Type *semaPt){
   DisableInterrupts();
   while(semaPt->Value == 0){ // same as OS_Wait, allow other threads to access cpu time
-    Mutex_Block(semaPt);
+    RunPt->block_pt = semaPt;
+		RunPt->current_state = BLOCKED;
+  
+		uint32_t tail = semaPt->tail;
+		semaPt->blocked_threads[tail] = RunPt;
+		semaPt->tail = (tail+1) % MAXTHREADS;
     EnableInterrupts();
     OS_Suspend();
   }
@@ -255,7 +268,9 @@ void OS_bSignal(Sema4Type *semaPt){
   long sr;
   sr = StartCritical();
   if(semaPt->Value == 0){
-    Mutex_Release(semaPt);
+		uint32_t head = semaPt->head;
+		semaPt->blocked_threads[head]->current_state = ACTIVE;
+		semaPt->head = (head + 1) % MAXTHREADS;
   }
   semaPt->Value = 1;
   EndCritical(sr);
@@ -294,49 +309,49 @@ int OS_AddThread(void(*task)(void),
   uint32_t stackSize, uint32_t priority){
 
   long sr = StartCritical(); // ensure this is atomic
-  uint32_t numTCBs;
 
-  // find first free TCB
-  for(numTCBs = 0; numTCBs < MAXTHREADS; numTCBs++){
-    if(TCBs[numTCBs].current_state == DEAD){
-      break;
-    }
-  }
-  
-  // check to make sure we have room to add another thread
-  if(numTCBs == MAXTHREADS){
-    EndCritical(sr);
-    return 0;
-  }
-
-  if(numTCBs == 0){
-    TCBs[numTCBs].next = &TCBs[0]; // only one thread running, single element linked list loops back to itself
-    RunPt = &TCBs[numTCBs];
+  if(NumThreads_Global == 0){
+    TCBs[0].current_state = ACTIVE;
+    TCBs[0].id = NumThreads_Global;
+    NumThreads_Global++;
+    TCBs[0].priority = priority;
+    TCBs[0].next = &TCBs[0];
+    TCBs[0].prev = &TCBs[0];
+    lastTCB = &TCBs[0];
+    RunPt = &TCBs[0];
+    SetInitialStack(0);
+    Stacks[0][STACKDEPTH - 2] = (int32_t)task;
   } else {
-
-      if(RunPt->current_state == DEAD){
-          EndCritical(sr);
-          return 0;
+    uint32_t numTCBs;
+    // find first free TCB
+    for(numTCBs = 0; numTCBs < MAXTHREADS; numTCBs++){
+      if(TCBs[numTCBs].current_state == DEAD){
+        break;
       }
+    }
 
-      struct TCB_t *tempPt = RunPt;
-      while(tempPt->next != RunPt){
-          tempPt = tempPt->next; // cycle through until end of linked list
-      }
-      tempPt->next = &TCBs[numTCBs];
-      tempPt = tempPt->next;
-      tempPt->next = RunPt;
+    // check to make sure we have room to add another thread
+    if(numTCBs == MAXTHREADS){
+      EndCritical(sr);
+      return 0;
+    }
+
+    TCBs[numTCBs].next = lastTCB->next;
+    TCBs[numTCBs].prev = lastTCB;
+
+    (lastTCB->next)->prev = &TCBs[numTCBs];
+    lastTCB->next = &TCBs[numTCBs];
+    lastTCB = &TCBs[numTCBs];
+
+    TCBs[numTCBs].current_state = ACTIVE;
+    TCBs[numTCBs].id = NumThreads_Global;
+    NumThreads_Global++;
+    TCBs[numTCBs].priority = priority;
+    SetInitialStack(numTCBs);
+    Stacks[numTCBs][STACKDEPTH - 2] = (int32_t)task;
   }
 
-  SetInitialStack(numTCBs);
-  Stacks[numTCBs][STACKDEPTH - 2] = (int32_t)task; // set the program counter for task stack
-  TCBs[numTCBs].sleep_ms = 0;
-  TCBs[numTCBs].current_state = ACTIVE;
-  TCBs[numTCBs].id = numTCBs;
-	TCBs[numTCBs].priority = priority;
-	NumThreads_Global++;
-  EndCritical(sr);
-     
+  EndCritical(sr); 
   return 1;
 };
 
@@ -371,7 +386,7 @@ uint32_t OS_Id(void){
 
 #define MAXPERIODIC 2
 uint32_t periodic_thread_cnt = 0;
-void(*PeriodicTask1)(void);
+//void(*PeriodicTask1)(void);
 void(*PeriodicTask2)(void);
 uint32_t periodic_counter = 0; //will need an array for multiple jitter tasks
 uint32_t maxJitter1;
@@ -380,9 +395,9 @@ uint32_t LastTime;
 /*
 Timer 4 is used for one periodic thread
 */
-void Timer4A_Handler(void){
-  TIMER4_ICR_R = TIMER_ICR_TATOCINT;
-  PeriodicTask1();
+//void Timer4A_Handler(void){
+  //TIMER4_ICR_R = TIMER_ICR_TATOCINT;
+  //(*PeriodicTask1)();
 	/*
 	static unsigned long lastTime;
 	unsigned long jitter;
@@ -411,12 +426,7 @@ if(NumSamples < RUNLENGTH){   // finite time run
     LastTime = thisTime;
   }
 	*/
-}
-
-void Timer1A_Handler(void){
-  TIMER1_ICR_R = TIMER_ICR_TATOCINT;
-  PeriodicTask2();
-}
+//}
 
 //******** OS_AddPeriodicThread *************** 
 // add a background periodic task
@@ -445,40 +455,10 @@ int OS_AddPeriodicThread(void(*task)(void),
     switch (periodic_thread_cnt)
     {
     case 0:
-     // maxJitter1 = 0;
-    	SYSCTL_RCGCTIMER_R |= 0x10;   // 0) activate TIMER4
-      TIMER4_CTL_R = 0x00000000;    // 1) disable TIMER4A during setup
-      TIMER4_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
-      TIMER4_TAMR_R = 0x00000002;   // 3) configure for periodic mode, default down-count settings
-      TIMER4_TAILR_R = period-1;    // 4) reload value
-      TIMER4_TAPR_R = 0;            // 5) bus clock resolution
-      TIMER4_ICR_R = 0x00000001;    // 6) clear TIMER4A timeout flag
-      TIMER4_IMR_R = 0x00000001;    // 7) arm timeout interrupt
-      priority = (priority & 0x07) << 21; // mask priority (nvic bits 23-21)
-      NVIC_PRI17_R = (NVIC_PRI17_R&0xF00FFFFF);
-      NVIC_PRI17_R = (NVIC_PRI17_R | priority); // 8) priority
-      // interrupts enabled in the main program after all devices initialized
-      // vector number 51, interrupt number 35
-      NVIC_EN2_R = 1<<(70-64);      // 9) enable IRQ 70 in NVIC 
-      TIMER4_CTL_R = 0x00000001;    // 10) enable TIMER4A
-      PeriodicTask1 = task;
+			Timer4A_Init(task, period, priority);
       break;
     case 1:
-      //maxJitter2 = 0;
-			SYSCTL_RCGCTIMER_R |= 0x02;   // 0) activate TIMER1
-			TIMER1_CTL_R = 0x00000000;    // 1) disable TIMER1A during setup
-			TIMER1_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
-			TIMER1_TAMR_R = 0x00000002;   // 3) configure for periodic mode, default down-count settings
-			TIMER1_TAILR_R = period-1;    // 4) reload value
-			TIMER1_TAPR_R = 0;            // 5) bus clock resolution
-			TIMER1_ICR_R = 0x00000001;    // 6) clear TIMER1A timeout flag
-			TIMER1_IMR_R = 0x00000001;    // 7) arm timeout interrupt
-			NVIC_PRI5_R = (NVIC_PRI5_R&0xFFFF00FF)| (priority << 13); // 8) priority bit 15-13
-			// interrupts enabled in the main program after all devices initialized
-			// vector number 37, interrupt number 21
-			NVIC_EN0_R = 1<<21;           // 9) enable IRQ 21 in NVIC
-			TIMER1_CTL_R = 0x00000001;    // 10) enable TIMER1A
-      PeriodicTask2 = task;
+			Timer1A_Init(task, period, priority);
       break; 
     default:
       break;
