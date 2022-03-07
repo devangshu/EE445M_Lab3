@@ -587,6 +587,7 @@ int OS_AddSW2Task(void(*task)(void), uint32_t priority){
     long volatile delay;
 	SYSCTL_RCGCGPIO_R |= 0x00000020; 	// (a) activate clock for port F
   delay = SYSCTL_RCGCGPIO_R;
+  GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY;
   GPIO_PORTF_CR_R = 0x01;           // allow changes to PF4
   GPIO_PORTF_DIR_R &= ~0x01;    		// (c) make PF4 in (built-in button)
   GPIO_PORTF_AFSEL_R &= ~0x01;  		//     disable alt funct on PF4
