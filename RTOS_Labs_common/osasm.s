@@ -11,6 +11,7 @@
         PRESERVE8
 
         EXTERN  RunPt            ; currently running thread
+		EXTERN 	OS_GetNextThread
 
         EXPORT  StartOS
         EXPORT  ContextSwitch
@@ -116,8 +117,11 @@ PendSV_Handler
 	LDR 	R0, =RunPt	 	; 4) R0=pointer to RunPt, old
 	LDR 	R1, [R0] 		; R1 = RunPt
 	STR 	SP, [R1] 		; 5) Save SP into TCB
-	LDR 	R1, [R1,#4] 	; 6) R1 = RunPt->next
-	STR 	R1, [R0] 		; RunPt = R1
+	;LDR 	R1, [R1,#4] 	; 6) R1 = RunPt->next
+	PUSH 	{R0, LR}
+	BL		OS_GetNextThread
+	POP 	{R0, LR}
+	LDR 	R1, [R0] 		; RunPt = R1
 	LDR 	SP, [R1] 		; 7) new thread SP; SP=RunPt->sp;
 	POP 	{R4-R11} 		; 8) restore regs r4-11
 	CPSIE 	I 				; 9) tasks run enabled
