@@ -93,10 +93,14 @@ void Timer3A_Handler(void){
 void OS_GetNextThread(void){
 	
 	TCB_t *tempPt = RunPt; // temporary copy so we can iterate through TCBs
-//	TCB_t *last = RunPt; 
+	TCB_t *last = RunPt; 
 	TCB_t *highestPriority;
 	int maxPriority = 255; // this value will change based on the number of priority levels
   
+	if (last->current_state != ACTIVE){
+		last = last->prev;
+	}
+	
   do
   {
     tempPt = tempPt->next;
@@ -104,7 +108,7 @@ void OS_GetNextThread(void){
       maxPriority = tempPt->priority;
       highestPriority = tempPt;
     }
-  } while (RunPt != tempPt);
+  } while (last != tempPt);
   RunPt = highestPriority;  
 	
 	/*
@@ -158,6 +162,7 @@ void OS_Init(void){
   PLL_Init(Bus80MHz);
 	Timer3A_Init();
   UART_Init();
+  ST7735_InitR(INITR_REDTAB);
 
   // initialize all TCBs
   uint32_t i;
@@ -627,6 +632,9 @@ void OS_Kill(void){
 	(RunPt->next)->prev = RunPt->prev;
   RunPt->current_state = DEAD;
   RunPt->sleep_ms = 0;
+  if(RunPt == lastTCB){
+    lastTCB = RunPt->prev;
+  }
 	NumThreads_Global--;
   EnableInterrupts();   // end of atomic section 
 	OS_Suspend();
