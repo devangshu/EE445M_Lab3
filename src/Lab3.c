@@ -281,7 +281,7 @@ void PID(void){
 // Interpreter is a foreground thread, accepts input from serial port, outputs to serial port
 // inputs:  none
 // outputs: none
-void Interpreter(void);    // just a prototype, link to your interpreter
+// void Interpreter(void);    // just a prototype, link to your interpreter
 // add the following commands, leave other commands, if they make sense
 // 1) print performance measures 
 //    time-jitter, number of data points lost, number of calculations performed
@@ -654,7 +654,7 @@ void Thread6(void){  // foreground thread
     PD0 ^= 0x01;        // debugging toggle bit 0  
   }
 }
-extern void Jitter(int32_t, uint32_t const, uint32_t []); // prints jitter information (write this)
+// extern void Jitter(int32_t, uint32_t const, uint32_t []); // prints jitter information (write this)
 void Thread7(void){  // foreground thread
   UART_OutString("\n\rEE345M/EE380L, Lab 3 Procedure 2\n\r");
   OS_Sleep(5000);   // 10 seconds        

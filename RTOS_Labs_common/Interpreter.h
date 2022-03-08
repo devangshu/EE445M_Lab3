@@ -15,7 +15,14 @@
  ******************************************************************************/
 
 
-
+/**
+ * @brief Displays Jitter information on the LCD
+ * 
+ * @param MaxJitter 
+ * @param JitterSize 
+ * @param JitterHistogram 
+ */
+void Jitter(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogram[]);
 
 
 /**

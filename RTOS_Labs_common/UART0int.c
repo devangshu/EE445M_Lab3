@@ -63,9 +63,9 @@
 #define UART_ICR_RXIC           0x00000010  // Receive Interrupt Clear
 
 
-#define FIFOSIZE   1024       // size of the FIFOs (must be power of 2)
-#define FIFOSUCCESS 1         // return value on success
-#define FIFOFAIL    0         // return value on failure
+// #define FIFOSIZE   1024       // size of the FIFOs (must be power of 2)
+// #define FIFOSUCCESS 1         // return value on success
+// #define FIFOFAIL    0         // return value on failure
 
 
 // initialize the semaphors for rx and tx

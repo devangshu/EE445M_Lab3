@@ -167,7 +167,7 @@ void Interpreter_show_maxjitter() {
 // *********** Command line interpreter (shell) ************
 void Interpreter(void){ 
     UART_Init();
-    UART_OutString("EE445M Lab 2 Interpreter");
+    UART_OutString("EE445M Lab 3 Interpreter");
     OutCRLF();
     
     char string[20];
