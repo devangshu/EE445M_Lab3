@@ -28,8 +28,8 @@ extern uint32_t NumThreads_Global;
 // Print jitter histogram to LCD
 void Jitter(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogram[]){
     // find tallest column for scaling
-    int largest_col = 0;
-    int largest_col_count = 0;
+    uint32_t largest_col = 0;
+    uint32_t largest_col_count = 0;
 
     for (int i = 0; i < JitterSize; i++) {
         if (JitterHistogram[i] > largest_col_count) {
@@ -39,7 +39,7 @@ void Jitter(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogr
     }
 
     // scale each column to fit into 8 rows (top virtual screen)
-    float scale_factor = (float) largest_col_count / 8.0;
+    float scale_factor = largest_col_count / 8.0f;
     uint32_t scaled_jitter[JitterSize];
 
     for (int i = 0; i < JitterSize; i++) {
