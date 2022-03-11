@@ -39,11 +39,11 @@ typedef struct Sema4 Sema4Type;
 
 struct TCB_t{
    uint32_t * sp;
-   TCB_t *next; // add back for when removing tasks
+   TCB_t *next;
    TCB_t *prev;
-   Sema4Type *block_pt;
+   Sema4Type *block_pt; // points to semaphore that the thread is blocked on
    uint32_t id;
-   uint8_t priority;
+   uint8_t priority; // priority level of thread
    uint32_t sleep_ms; // sleep timer, time left
    ThreadState_t current_state;
 };
@@ -56,7 +56,6 @@ struct  Sema4{
   uint32_t head;
   uint32_t tail;
   TCB_t *blocked_threads[MAXTHREADS];
-// add other components here, if necessary to implement blocking
 };
 typedef struct Sema4 Sema4Type;
 

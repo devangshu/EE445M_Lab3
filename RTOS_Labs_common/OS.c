@@ -213,14 +213,6 @@ void OS_Wait(Sema4Type *semaPt){
   DisableInterrupts(); // disable interrupts to make sure current thread is the only thread trying to access the semaphore at any given time 
   semaPt->Value -= 1;
   if(semaPt->Value < 0){
-    /*
-    RunPt->block_pt = semaPt;
-		RunPt->current_state = BLOCKED;
-  
-		uint32_t tail = semaPt->tail;
-		semaPt->blocked_threads[tail] = RunPt;
-		semaPt->tail = (tail+1) % MAXTHREADS;
-    */
     Mutex_Block(semaPt);
     EnableInterrupts();
     OS_Suspend();
@@ -238,12 +230,7 @@ void OS_Signal(Sema4Type *semaPt){
   long sr = StartCritical();
   semaPt->Value += 1; // increment semaphore value atomically. If value was at 0, this allows a waiting thread to acquire the semaphore.
   if(semaPt->Value <= 0){
-    /*
-		uint32_t head = semaPt->head;
-		semaPt->blocked_threads[head]->current_state = ACTIVE;
-		semaPt->head = (head + 1) % MAXTHREADS;  
-    */
-   Mutex_Release(semaPt);
+    Mutex_Release(semaPt);
   }
   EndCritical(sr);
 }; 
@@ -406,16 +393,12 @@ uint32_t LastTime;
 /*
 Timer 4 is used for one periodic thread
 */
-//void Timer4A_Handler(void){
-  //TIMER4_ICR_R = TIMER_ICR_TATOCINT;
-  //(*PeriodicTask1)();
-	/*
+void Timer4A_Handler(void){
 	static unsigned long lastTime;
 	unsigned long jitter;
 	unsigned long thisTime;
 
-
-if(NumSamples < RUNLENGTH){   // finite time run
+  if(NumSamples < RUNLENGTH){   // finite time run
     thisTime = OS_Time();       // current time, 12.5 ns
 		PeriodicTask();
 		periodic_counter++;
@@ -436,8 +419,7 @@ if(NumSamples < RUNLENGTH){   // finite time run
     }
     LastTime = thisTime;
   }
-	*/
-//}
+}
 
 //******** OS_AddPeriodicThread *************** 
 // add a background periodic task
