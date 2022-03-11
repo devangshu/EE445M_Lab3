@@ -213,12 +213,15 @@ void OS_Wait(Sema4Type *semaPt){
   DisableInterrupts(); // disable interrupts to make sure current thread is the only thread trying to access the semaphore at any given time 
   semaPt->Value -= 1;
   if(semaPt->Value < 0){
+    /*
     RunPt->block_pt = semaPt;
 		RunPt->current_state = BLOCKED;
   
 		uint32_t tail = semaPt->tail;
 		semaPt->blocked_threads[tail] = RunPt;
 		semaPt->tail = (tail+1) % MAXTHREADS;
+    */
+    Mutex_Block(semaPt);
     EnableInterrupts();
     OS_Suspend();
   }
@@ -235,9 +238,12 @@ void OS_Signal(Sema4Type *semaPt){
   long sr = StartCritical();
   semaPt->Value += 1; // increment semaphore value atomically. If value was at 0, this allows a waiting thread to acquire the semaphore.
   if(semaPt->Value <= 0){
+    /*
 		uint32_t head = semaPt->head;
 		semaPt->blocked_threads[head]->current_state = ACTIVE;
 		semaPt->head = (head + 1) % MAXTHREADS;  
+    */
+   Mutex_Release(semaPt);
   }
   EndCritical(sr);
 }; 
@@ -581,6 +587,7 @@ int OS_AddSW2Task(void(*task)(void), uint32_t priority){
     long volatile delay;
 	SYSCTL_RCGCGPIO_R |= 0x00000020; 	// (a) activate clock for port F
   delay = SYSCTL_RCGCGPIO_R;
+  GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY;
   GPIO_PORTF_CR_R = 0x01;           // allow changes to PF4
   GPIO_PORTF_DIR_R &= ~0x01;    		// (c) make PF4 in (built-in button)
   GPIO_PORTF_AFSEL_R &= ~0x01;  		//     disable alt funct on PF4
